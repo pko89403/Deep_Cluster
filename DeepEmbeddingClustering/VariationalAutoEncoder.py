@@ -41,10 +41,10 @@ class VAE(torch.nn.Module):
     # This will create a tensor of Gaussian noise, the same shape and data type as a Variable X:
     def reparameterize(self, mu, logvar):
         # std = torch.exp(torch.mul(logvar, 0.5)) 
-        # eps = Variable(std.data.new(std.size()).normal_())
-        # z = eps.mul(std).add(mu)
         std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
+        # eps = torch.randn_like(std)
+        eps = Variable(std.data.new(std.size()).normal_())
+        # z = eps.mul(std).add(mu)
         z = mu + eps * std
         return z
     
@@ -56,3 +56,4 @@ class VAE(torch.nn.Module):
         z = self.reparameterize(mu, logvar)
         recon_x = self.decode(z)
         return rercon_x, mu, logvar
+

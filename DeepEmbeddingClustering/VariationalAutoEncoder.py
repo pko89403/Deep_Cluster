@@ -1,3 +1,4 @@
+# 
 import torch
 from torch.autograd import Variable
 import torchvision
@@ -68,7 +69,7 @@ class VAE(torch.nn.Module):
         mu, logvar = self.encode(x.view(-1, 784))
         z = self.reparameterize(mu, logvar)
         recon_x = self.decode(z)
-        return rercon_x, mu, logvar
+        return recon_x, mu, logvar
 
 def mnist_data_loader():
     train_data = torchvision.datasets.MNIST(root='./mnist',
@@ -77,24 +78,25 @@ def mnist_data_loader():
                                             download=False)
     test_data = torchvision.datasets.MNIST(root='./mnist',
                                             train=False,
-                                            transforms=torchvision.transforms.ToTensor(),
+                                            transform=torchvision.transforms.ToTensor(),
                                             download=False)
-    train_loader = Data.DataLoader(datasets=train_data,
+    train_loader = Data.DataLoader(dataset=train_data,
                                     batch_size=128,
                                     shuffle=True,
                                     num_workers=2)
     test_loader = Data.DataLoader(dataset=test_data,
                                     batch_size=128,
                                     shuffle=True,
-                                    num_worrkers=2)
+                                    num_workers=2)
     return train_loader, test_loader
 
 def loss_func(x, recon_x, mu, logvar):
-    bce = F.binary_cross_entropy(x.view(-1, 784), recon_x)
+    bce = F.binary_cross_entropy(recon_x, x.view(-1, 784))
     kld = (-0.5) * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     kld /= 784 * 128
     return bce + kld
 
+train_loader, test_loader = mnist_data_loader()
 vae = VAE()
 optimizer = torch.optim.Adam(params=vae.parameters(), 
                                 lr=1e-3)
@@ -113,14 +115,14 @@ def train(epoch):
         loss = loss_func(data, recon_batch, mu, logvar)
         loss.backward()
         optimizer.step()
-        train_loss += loss.data[0]
+        train_loss += loss.item()
         if batch_idx % 100 == 0:
             print('Train Epoch: {} [{}/{} {:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, 
                 batch_idx * len(data), 
                 len(train_loader.dataset), 
                 100. * batch_idx / len(train_loader),
-                loss.data[0] / len(data)
+                loss.item() / len(data)
             ))
     
     avg_loss = train_loss / len(train_loader.dataset) 
@@ -133,22 +135,23 @@ def train(epoch):
 def test(epoch):
     vae.eval()
     test_loss = 0
-    for i, (data, lb) in enumerate(test_loader):
-        data = Variable(data, volatile=True) # volatile(True) == requirer_grad(False)
-        recon_batch, mu, logvar = vae(data)
-        test_loss += loss_func(recon_batch, data, mu, logvar).data[0]
-        if i == 0:
-            n = min(data.size(0), 8)
-            comparison = torch.cat([data[:n], recon_batch.view(128, 1, 28, 28)[:n]])
-            save_image(comparison.data.cpu(), '/pretrain_vae/reconstruction_' + str(epoch) + ".png", nrow=n)
-    
-    test_loss /= len(test_loader.dataset) 
-    print('==================> Test Set Loss : {:.4f}'.format(test_loss))
+    with torch.no_grad(): # volatile(True) == requirer_grad(False)
+        for i, (data, lb) in enumerate(test_loader):
+            data = Variable(data) 
+            recon_batch, mu, logvar = vae(data)
+            test_loss += loss_func(data, recon_batch, mu, logvar).item()
+            if i == 0:
+                n = min(data.size(0), 8)
+                comparison = torch.cat([data[:n], recon_batch.view(128, 1, 28, 28)[:n]])
+                save_image(comparison.data.cpu(), 'pretrain_vae/reconstruction_' + str(epoch) + ".png", nrow=n)
+        
+        test_loss /= len(test_loader.dataset) 
+        print('==================> Test Set Loss : {:.4f}'.format(test_loss))
     return test_loss
 
 for epoch in range(20):
     train(epoch)
     val_loss = test(epoch)
     scheduler.step(val_loss)
-    torch.save(vae.state_dict(), 'pretrain_vae.pkl')
+    torch.save(vae.state_dict(), 'save_models/pretrain_vae.pkl')
 

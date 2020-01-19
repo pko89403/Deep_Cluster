@@ -1,10 +1,11 @@
 # 
+import torchvision
+from torchvision.utils import save_image 
+from Mnist_loader import mnist_data_loader
+
 import torch
 from torch.autograd import Variable
-import torchvision
-import torch.utils.data as Data
 import torch.nn.functional as F 
-from torchvision.utils import save_image 
 import torch.optim.lr_scheduler as lr_scheduler
 """
 optimizer는 step() method를 통해 argument로 전달받은 parameter를 업데이트한다.
@@ -71,24 +72,6 @@ class VAE(torch.nn.Module):
         recon_x = self.decode(z)
         return recon_x, mu, logvar
 
-def mnist_data_loader():
-    train_data = torchvision.datasets.MNIST(root='./mnist',
-                                            train=True,
-                                            transform=torchvision.transforms.ToTensor(),
-                                            download=False)
-    test_data = torchvision.datasets.MNIST(root='./mnist',
-                                            train=False,
-                                            transform=torchvision.transforms.ToTensor(),
-                                            download=False)
-    train_loader = Data.DataLoader(dataset=train_data,
-                                    batch_size=128,
-                                    shuffle=True,
-                                    num_workers=2)
-    test_loader = Data.DataLoader(dataset=test_data,
-                                    batch_size=128,
-                                    shuffle=True,
-                                    num_workers=2)
-    return train_loader, test_loader
 
 def loss_func(x, recon_x, mu, logvar):
     bce = F.binary_cross_entropy(recon_x, x.view(-1, 784))
@@ -96,13 +79,6 @@ def loss_func(x, recon_x, mu, logvar):
     kld /= 784 * 128
     return bce + kld
 
-train_loader, test_loader = mnist_data_loader()
-vae = VAE()
-optimizer = torch.optim.Adam(params=vae.parameters(), 
-                                lr=1e-3)
-# torch.optim.lr_scheduler.ReduceLROnPlateau allows dynamic learning rate reducing based on some validation measurements.
-scheduler = lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
-                                            mode='min')
 
 def train(epoch):
     vae.train()
@@ -149,9 +125,18 @@ def test(epoch):
         print('==================> Test Set Loss : {:.4f}'.format(test_loss))
     return test_loss
 
-for epoch in range(20):
-    train(epoch)
-    val_loss = test(epoch)
-    scheduler.step(val_loss)
-    torch.save(vae.state_dict(), 'save_models/pretrain_vae.pkl')
 
+if __name__ == "__main__":
+    train_loader, test_loader = mnist_data_loader()
+    vae = VAE()
+    optimizer = torch.optim.Adam(params=vae.parameters(), 
+                                    lr=1e-3)
+    # torch.optim.lr_scheduler.ReduceLROnPlateau allows dynamic learning rate reducing based on some validation measurements.
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer=optimizer,
+                                                mode='min')
+
+    for epoch in range(20):
+        train(epoch)
+        val_loss = test(epoch)
+        scheduler.step(val_loss)
+        torch.save(vae.state_dict(), 'save_models/pretrain_vae.pkl')
